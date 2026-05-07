@@ -7,8 +7,8 @@ const Parser = require('rss-parser');
 
 const app = express();
 const db = new Database('database.db');
-const PORT = 5000;
-const SECRET_KEY = 'athletix_pulse_secret_key';
+const PORT = process.env.PORT || 5000;
+const SECRET_KEY = process.env.JWT_SECRET || 'athletix_pulse_secret_key';
 const parser = new Parser();
 
 app.use(cors());

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: news-web-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+
+  - type: web
+    name: news-web-frontend
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://news-web-api.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
