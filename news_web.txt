@@ -1,0 +1,894 @@
+Directory structure:
+└── tahiraltundag-news_web/
+    ├── README.md
+    ├── eslint.config.js
+    ├── index.html
+    ├── package.json
+    ├── vite.config.js
+    ├── server/
+    │   ├── index.js
+    │   └── package.json
+    └── src/
+        ├── App.css
+        ├── App.jsx
+        ├── index.css
+        └── main.jsx
+
+================================================
+FILE: README.md
+================================================
+# React + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+
+
+================================================
+FILE: eslint.config.js
+================================================
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{js,jsx}'],
+    extends: [
+      js.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      globals: globals.browser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+  },
+])
+
+
+
+================================================
+FILE: index.html
+================================================
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Athletix Pulse | Sporun Kalbi</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
+
+
+================================================
+FILE: package.json
+================================================
+{
+  "name": "news_web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.5.0",
+    "vite": "^8.0.10"
+  }
+}
+
+
+
+================================================
+FILE: vite.config.js
+================================================
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
+
+
+
+================================================
+FILE: server/index.js
+================================================
+const express = require('express');
+const cors = require('cors');
+const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const Parser = require('rss-parser');
+
+const app = express();
+const db = new Database('database.db');
+const PORT = 5000;
+const SECRET_KEY = 'athletix_pulse_secret_key';
+const parser = new Parser();
+
+app.use(cors());
+app.use(express.json());
+
+// --- VERİTABANI KURULUMU ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT,
+    title TEXT,
+    lead TEXT,
+    content TEXT,
+    image TEXT,
+    type TEXT,
+    external_id TEXT UNIQUE -- Aynı haberi tekrar eklememek için
+  );
+
+  CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    news_id INTEGER,
+    username TEXT,
+    comment TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(news_id) REFERENCES news(id)
+  );
+`);
+
+// --- CANLI RSS HABER ÇEKİCİ (GERÇEK ZAMANLI) ---
+async function fetchRealNewsFromWeb() {
+  console.log('Sitelerden son dakika haberleri taranıyor...');
+  
+  // Güvenilir Spor RSS Kaynakları
+  const feeds = [
+    'https://www.fotomac.com.tr/rss/anasayfa.xml',
+    'https://www.trtspor.com.tr/rss/anasayfa.xml'
+  ];
+
+  const insertNews = db.prepare('INSERT OR IGNORE INTO news (category, title, lead, content, image, type, external_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+
+  for (const feedUrl of feeds) {
+    try {
+      const feed = await parser.parseURL(feedUrl);
+      console.log(`${feed.title} firmasından veriler çekildi.`);
+
+      feed.items.slice(0, 10).forEach((item, index) => {
+        // Gelen haberi kategorize edelim (Bazıları gündem, bazıları flash)
+        let type = index % 2 === 0 ? 'breaking' : 'agenda';
+        
+        // Görsel varsa al, yoksa standart bir futbol görseli kullan
+        let imageUrl = 'https://images.unsplash.com/photo-1518605368461-1eb246ce0b30?auto=format&fit=crop&q=80&w=800';
+        if (item.enclosure && item.enclosure.url) {
+          imageUrl = item.enclosure.url;
+        }
+
+        // Başlık, açıklama ve içeriği temizle
+        const title = item.title.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        const lead = item.contentSnippet ? item.contentSnippet.substring(0, 150) : title;
+        
+        insertNews.run(
+          'Gündem', 
+          title, 
+          lead, 
+          (item.content || lead) + ' (Haberin devamı Athletix Pulse sunucularına aktarılmıştır.)', 
+          imageUrl, 
+          type, 
+          item.link // Linki benzersiz ID olarak kullan
+        );
+      });
+    } catch (error) {
+      console.error(`RSS çekme hatası (${feedUrl}):`, error.message);
+    }
+  }
+  console.log('Canlı haber güncellemesi tamamlandı.');
+}
+
+// Her 10 dakikada bir siteleri tara ve yeni haberleri al
+setInterval(fetchRealNewsFromWeb, 10 * 60 * 1000);
+// Sunucu açıldığında hemen çalıştır
+fetchRealNewsFromWeb();
+
+
+// --- API ENDPOINTLERİ ---
+
+app.get('/api/news', (req, res) => {
+  const allNews = db.prepare('SELECT * FROM news ORDER BY id DESC LIMIT 30').all();
+  res.json(allNews);
+});
+
+app.post('/api/register', (req, res) => {
+  const { username, password } = req.body;
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  try {
+    db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(username, hashedPassword);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, message: 'Kullanıcı adı alınmış.' });
+  }
+});
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  if (user && bcrypt.compareSync(password, user.password)) {
+    const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY);
+    res.json({ success: true, token, username: user.username });
+  } else {
+    res.status(401).json({ success: false, message: 'Hatalı giriş.' });
+  }
+});
+
+app.get('/api/comments/:newsId', (req, res) => {
+  const comments = db.prepare('SELECT * FROM comments WHERE news_id = ? ORDER BY timestamp DESC').all(req.params.newsId);
+  res.json(comments);
+});
+
+app.post('/api/comments', (req, res) => {
+  const { newsId, username, comment } = req.body;
+  db.prepare('INSERT INTO comments (news_id, username, comment) VALUES (?, ?, ?)').run(newsId, username, comment);
+  res.json({ success: true });
+});
+
+app.listen(PORT, () => {
+  console.log(`Dinamik sunucu http://localhost:${PORT} üzerinde aktif.`);
+});
+
+
+
+================================================
+FILE: server/package.json
+================================================
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.16.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.9.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "nodemon": "^3.1.14",
+    "rss-parser": "^3.13.0"
+  }
+}
+
+
+
+================================================
+FILE: src/App.css
+================================================
+/* Boşaltıldı - index.css kullanılıyor */
+
+
+
+================================================
+FILE: src/App.jsx
+================================================
+import React, { useState, useEffect } from 'react'
+
+const API_URL = 'http://localhost:5000/api';
+
+function App() {
+  const [news, setNews] = useState([])
+  const [selectedArticle, setSelectedArticle] = useState(null)
+  const [user, setUser] = useState(null)
+  const [authMode, setAuthMode] = useState(null)
+  const [authData, setAuthData] = useState({ username: '', password: '' })
+  const [comments, setComments] = useState([])
+  const [newComment, setNewComment] = useState('')
+
+  useEffect(() => {
+    fetch(`${API_URL}/news`)
+      .then(res => res.json())
+      .then(data => setNews(data))
+      .catch(err => console.log('Sunucuya bağlanılamadı:', err))
+  }, [])
+
+  useEffect(() => {
+    if (selectedArticle) {
+      fetch(`${API_URL}/comments/${selectedArticle.id}`)
+        .then(res => res.json())
+        .then(data => setComments(data))
+    }
+  }, [selectedArticle])
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    const endpoint = authMode === 'login' ? '/login' : '/register';
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (authMode === 'login') {
+          setUser({ username: data.username, token: data.token });
+          setAuthMode(null);
+        } else {
+          alert('Kayıt başarılı! Giriş yapabilirsiniz.');
+          setAuthMode('login');
+        }
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      alert('Sunucu hatası!');
+    }
+  }
+
+  const handleComment = async (e) => {
+    e.preventDefault();
+    if (!user) return alert('Giriş yapmalısınız.');
+    const res = await fetch(`${API_URL}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        newsId: selectedArticle.id,
+        username: user.username,
+        comment: newComment
+      })
+    });
+    if (res.ok) {
+      setNewComment('');
+      const commRes = await fetch(`${API_URL}/comments/${selectedArticle.id}`);
+      const commData = await commRes.json();
+      setComments(commData);
+    }
+  }
+
+  // Resim yüklenemezse çalışacak fonksiyon
+  const handleImageError = (e) => {
+    e.target.src = 'https://images.unsplash.com/photo-1518605368461-1eb246ce0b30?auto=format&fit=crop&q=80&w=600';
+  };
+
+  return (
+    <div className="app-wrapper">
+      <header className="main-header">
+        <div className="logo">ATHLETIX<span>PULSE</span></div>
+        <nav className="auth-section">
+          {user ? (
+            <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
+              <span className="comment-user">@{user.username}</span>
+              <button className="auth-btn secondary" onClick={() => setUser(null)}>Çıkış</button>
+            </div>
+          ) : (
+            <div style={{display: 'flex', gap: '15px'}}>
+              <button className="auth-btn secondary" onClick={() => setAuthMode('register')}>Kaydol</button>
+              <button className="auth-btn primary" onClick={() => setAuthMode('login')}>Giriş Yap</button>
+            </div>
+          )}
+        </nav>
+      </header>
+
+      <main className="content-grid">
+        {/* Sol Sütun */}
+        <aside className="column">
+          <h2 className="col-title">🎙️ Uzman Analizleri</h2>
+          {news.filter(n => n.type === 'expert').map(item => (
+            <div key={item.id} className="expert-card" onClick={() => setSelectedArticle(item)}>
+              <div className="expert-header">
+                <img src={item.image} alt={item.title} className="expert-img" onError={handleImageError} />
+                <span className="expert-name">{item.title}</span>
+              </div>
+              <p className="expert-quote">"{item.lead}"</p>
+            </div>
+          ))}
+        </aside>
+
+        {/* Orta Sütun */}
+        <section className="column">
+          <h2 className="col-title">⚽ Futbol Gündemi</h2>
+          <div className="main-news-grid">
+            {news.filter(n => n.type === 'agenda').map(item => (
+              <div key={item.id} className="main-card" onClick={() => setSelectedArticle(item)}>
+                <img src={item.image} alt={item.title} className="main-card-img" onError={handleImageError} />
+                <div className="main-card-body">
+                  <span className="breaking-time">{item.category}</span>
+                  <h3 className="main-card-title">{item.title}</h3>
+                  <p style={{fontSize: '0.8rem', color: 'var(--text-dim)'}}>{item.lead.substring(0, 100)}...</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Sağ Sütun */}
+        <aside className="column">
+          <h2 className="col-title">⚡ Flash Haber</h2>
+          {news.filter(n => n.type === 'breaking').map(item => (
+            <div key={item.id} className="breaking-item" onClick={() => setSelectedArticle(item)}>
+              <span className="breaking-time">AZ ÖNCE</span>
+              <h3 className="breaking-title">{item.title}</h3>
+            </div>
+          ))}
+        </aside>
+      </main>
+
+      {/* Giriş/Kayıt Modal */}
+      {authMode && (
+        <div className="article-overlay" style={{alignItems: 'center'}}>
+          <div className="auth-modal">
+            <h2 style={{fontFamily: 'var(--accent-font)', marginBottom: '25px', color: 'var(--primary)'}}>
+              {authMode === 'login' ? 'Giriş Yap' : 'Hesap Oluştur'}
+            </h2>
+            <form onSubmit={handleAuth}>
+              <input 
+                type="text" 
+                placeholder="Kullanıcı Adı" 
+                onChange={(e) => setAuthData({...authData, username: e.target.value})}
+              />
+              <input 
+                type="password" 
+                placeholder="Şifre" 
+                onChange={(e) => setAuthData({...authData, password: e.target.value})}
+              />
+              <button type="submit" className="auth-btn primary" style={{width: '100%', padding: '15px', marginTop: '10px'}}>
+                {authMode === 'login' ? 'Giriş' : 'Kaydol'}
+              </button>
+            </form>
+            <button className="auth-btn secondary" style={{width: '100%', marginTop: '15px', border: 'none'}} onClick={() => setAuthMode(null)}>Vazgeç</button>
+          </div>
+        </div>
+      )}
+
+      {/* Makale & Yorum Detayı */}
+      {selectedArticle && (
+        <div className="article-overlay">
+          <button className="close-btn" onClick={() => setSelectedArticle(null)}>×</button>
+          <div className="article-content">
+            <span className="breaking-time" style={{fontSize: '1rem'}}>{selectedArticle.category}</span>
+            <h1 style={{fontFamily: 'var(--accent-font)', fontSize: '3.5rem', margin: '20px 0', lineHeight: '1.1'}}>{selectedArticle.title}</h1>
+            <img src={selectedArticle.image} onError={handleImageError} style={{width: '100%', borderRadius: '20px', marginBottom: '40px', border: '1px solid var(--border)'}} />
+            <div className="article-lead">{selectedArticle.lead}</div>
+            <div className="article-body" style={{fontSize: '1.2rem', color: '#ccc'}}>
+              {selectedArticle.content}
+            </div>
+
+            {/* Yorumlar */}
+            <div className="comments-container">
+              <h2 className="col-title">💬 Yorumlar ({comments.length})</h2>
+              
+              {user ? (
+                <form onSubmit={handleComment} style={{marginBottom: '40px'}}>
+                  <textarea 
+                    className="comment-input"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Futbol hakkında bir yorum bırak..."
+                    rows="4"
+                  />
+                  <button type="submit" className="auth-btn primary">Yorumu Yayınla</button>
+                </form>
+              ) : (
+                <div className="comment-box" style={{textAlign: 'center', padding: '40px'}}>
+                  <p style={{color: 'var(--text-dim)', marginBottom: '20px'}}>Tartışmaya katılmak için giriş yapmalısınız.</p>
+                  <button className="auth-btn primary" onClick={() => setAuthMode('login')}>Giriş Yap</button>
+                </div>
+              )}
+
+              <div className="comments-list">
+                {comments.map(c => (
+                  <div key={c.id} className="comment-box">
+                    <div className="comment-header">
+                      <span className="comment-user">@{c.username}</span>
+                      <span style={{color: 'var(--text-dim)'}}>{new Date(c.timestamp).toLocaleString('tr-TR')}</span>
+                    </div>
+                    <p style={{fontSize: '1rem'}}>{c.comment}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App
+
+
+
+================================================
+FILE: src/index.css
+================================================
+:root {
+  --background: #0a0a0b;
+  --surface: #16181d;
+  --primary: #c5ff4a; /* Neon Yeşil */
+  --text: #ffffff;
+  --text-dim: #94a3b8;
+  --border: #2d3139;
+  --accent-font: 'Playfair Display', serif;
+  --main-font: 'Outfit', sans-serif;
+  --header-height: 80px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text);
+  font-family: var(--main-font);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* --- Layout --- */
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-header {
+  height: var(--header-height);
+  background: rgba(10, 10, 11, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: -1px;
+}
+
+.logo span {
+  color: var(--primary);
+  font-style: italic;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr 320px;
+  gap: 0;
+  height: calc(100vh - var(--header-height));
+}
+
+.column {
+  overflow-y: auto;
+  padding: 30px;
+  border-right: 1px solid var(--border);
+}
+
+.column:last-child {
+  border-right: none;
+}
+
+/* Custom Scrollbar */
+.column::-webkit-scrollbar {
+  width: 4px;
+}
+.column::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+.col-title {
+  font-family: var(--accent-font);
+  font-size: 1.4rem;
+  margin-bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--primary);
+}
+
+/* --- Components --- */
+.expert-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.expert-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-3px);
+}
+
+.expert-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.expert-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--primary);
+}
+
+.expert-name {
+  font-weight: 800;
+  font-size: 0.9rem;
+  display: block;
+}
+
+.expert-quote {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* Main Grid (Middle) */
+.main-news-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.main-card {
+  background: var(--surface);
+  border-radius: 15px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.main-card:hover {
+  transform: scale(1.02);
+  border-color: var(--primary);
+}
+
+.main-card-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.main-card-body {
+  padding: 20px;
+}
+
+.main-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+/* Breaking (Right) */
+.breaking-item {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.breaking-item:hover .breaking-title {
+  color: var(--primary);
+}
+
+.breaking-time {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: var(--primary);
+  display: block;
+  margin-bottom: 5px;
+}
+
+.breaking-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+/* --- Auth & Overlays --- */
+.auth-btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+  font-family: var(--main-font);
+}
+
+.auth-btn.primary {
+  background: var(--primary);
+  color: #000;
+  border: none;
+}
+
+.auth-btn.secondary {
+  background: transparent;
+  color: #fff;
+  border: 1px solid var(--border);
+}
+
+.auth-btn:hover {
+  filter: brightness(1.2);
+}
+
+.article-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.95);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 60px 20px;
+}
+
+.article-content {
+  width: 100%;
+  max-width: 900px;
+  position: relative;
+}
+
+.close-btn {
+  position: fixed;
+  top: 30px;
+  right: 40px;
+  font-size: 2.5rem;
+  color: #fff;
+  background: none;
+  border: none;
+  cursor: pointer;
+  z-index: 1100;
+}
+
+.article-lead {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 30px;
+  line-height: 1.4;
+  font-family: var(--accent-font);
+}
+
+/* --- Comments Section --- */
+.comments-container {
+  margin-top: 50px;
+  padding-top: 40px;
+  border-top: 1px solid var(--border);
+}
+
+.comment-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+
+.comment-user {
+  color: var(--primary);
+  font-weight: bold;
+}
+
+.comment-input {
+  width: 100%;
+  background: #000;
+  border: 1px solid var(--border);
+  color: #fff;
+  padding: 15px;
+  border-radius: 10px;
+  resize: none;
+  margin-bottom: 10px;
+}
+
+/* Auth Modal Specifics */
+.auth-modal {
+  background: var(--surface);
+  padding: 40px;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  margin: auto;
+}
+
+.auth-modal input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #000;
+  color: #fff;
+}
+
+
+
+================================================
+FILE: src/main.jsx
+================================================
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.jsx'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+
+
