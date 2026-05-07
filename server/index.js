@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -137,6 +138,13 @@ app.post('/api/comments', (req, res) => {
   res.json({ success: true });
 });
 
+// React frontend'ini serve et (API route'larından SONRA gelmeli)
+const distDir = path.join(__dirname, '..', 'dist');
+app.use(express.static(distDir));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distDir, 'index.html'));
+});
+
 app.listen(PORT, () => {
-  console.log(`Dinamik sunucu http://localhost:${PORT} üzerinde aktif.`);
+  console.log(`Sunucu http://localhost:${PORT} üzerinde aktif.`);
 });
