@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { sports, leagues } from '../data/mockData';
 
@@ -141,50 +141,106 @@ function MegaMenu({ sportId }) {
 }
 
 export default function Header({ user, theme, onToggleTheme, onLoginClick, onRegisterClick, onLogout }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const closeMobile = () => setMobileOpen(false);
+
   return (
-    <header className="site-header">
-      <div className="header-inner">
-        <Link to="/" className="site-logo">
-          TRİBÜN<span>·</span>
-        </Link>
+    <>
+      <header className="site-header">
+        <div className="header-inner">
+          <Link to="/" className="site-logo" onClick={closeMobile}>
+            TRİBÜN<span>·</span>
+          </Link>
 
-        <nav className="header-nav">
-          {sports.map(sport => (
-            <div key={sport.id} className="nav-item">
-              <Link
-                to={sport.id === 'iddaa' ? '/iddaa' : `/${sport.id}`}
-                className="nav-link"
-              >
-                <span className="nav-icon">{sport.icon}</span>
-                {sport.name}
-              </Link>
-              {sport.id !== 'iddaa' && <MegaMenu sportId={sport.id} />}
-            </div>
-          ))}
-        </nav>
+          <nav className="header-nav">
+            {sports.map(sport => (
+              <div key={sport.id} className="nav-item">
+                <Link
+                  to={sport.id === 'iddaa' ? '/iddaa' : `/${sport.id}`}
+                  className="nav-link"
+                >
+                  <span className="nav-icon">{sport.icon}</span>
+                  {sport.name}
+                </Link>
+                {sport.id !== 'iddaa' && <MegaMenu sportId={sport.id} />}
+              </div>
+            ))}
+          </nav>
 
-        <div className="header-auth">
-          <button
-            className="theme-toggle"
-            onClick={onToggleTheme}
-            title={theme === 'light' ? 'Koyu temaya geç' : 'Açık temaya geç'}
-          >
-            {theme === 'light' ? '🌙' : '☀️'}
-          </button>
+          <div className="header-auth">
+            <button
+              className="theme-toggle"
+              onClick={onToggleTheme}
+              title={theme === 'light' ? 'Koyu temaya geç' : 'Açık temaya geç'}
+            >
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
 
-          {user ? (
-            <>
-              <span className="auth-user">@{user.username}</span>
-              <button className="btn-outline" onClick={onLogout}>Çıkış</button>
-            </>
-          ) : (
-            <>
-              <button className="btn-outline" onClick={onRegisterClick}>Kaydol</button>
-              <button className="btn-primary" onClick={onLoginClick}>Giriş Yap</button>
-            </>
-          )}
+            {user ? (
+              <>
+                <span className="auth-user desktop-only">@{user.username}</span>
+                <button className="btn-outline desktop-only" onClick={onLogout}>Çıkış</button>
+              </>
+            ) : (
+              <>
+                <button className="btn-outline desktop-only" onClick={onRegisterClick}>Kaydol</button>
+                <button className="btn-primary desktop-only" onClick={onLoginClick}>Giriş Yap</button>
+              </>
+            )}
+
+            <button
+              className="hamburger-btn"
+              onClick={() => setMobileOpen(o => !o)}
+              aria-label="Menüyü aç"
+            >
+              <span className={`ham-line${mobileOpen ? ' open' : ''}`} />
+              <span className={`ham-line${mobileOpen ? ' open' : ''}`} />
+              <span className={`ham-line${mobileOpen ? ' open' : ''}`} />
+            </button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile Drawer */}
+      {mobileOpen && (
+        <div className="mobile-overlay" onClick={closeMobile}>
+          <nav className="mobile-drawer" onClick={e => e.stopPropagation()}>
+            <div className="mobile-drawer-header">
+              <span className="mobile-drawer-logo">TRİBÜN<span>·</span></span>
+              <button className="mobile-close" onClick={closeMobile}>✕</button>
+            </div>
+
+            <div className="mobile-nav-links">
+              {sports.map(sport => (
+                <Link
+                  key={sport.id}
+                  to={sport.id === 'iddaa' ? '/iddaa' : `/${sport.id}`}
+                  className="mobile-nav-link"
+                  onClick={closeMobile}
+                >
+                  <span className="mobile-nav-icon">{sport.icon}</span>
+                  {sport.name}
+                </Link>
+              ))}
+            </div>
+
+            <div className="mobile-auth">
+              {user ? (
+                <>
+                  <span className="mobile-user">@{user.username}</span>
+                  <button className="btn-outline" onClick={() => { onLogout(); closeMobile(); }}>Çıkış</button>
+                </>
+              ) : (
+                <>
+                  <button className="btn-outline" onClick={() => { onRegisterClick(); closeMobile(); }}>Kaydol</button>
+                  <button className="btn-primary" onClick={() => { onLoginClick(); closeMobile(); }}>Giriş Yap</button>
+                </>
+              )}
+            </div>
+          </nav>
+        </div>
+      )}
+    </>
   );
 }

@@ -1600,13 +1600,138 @@ img { display: block; max-width: 100%; }
   .odds-layout { grid-template-columns: 1fr; }
 }
 
+/* ======================================
+   HAMBURGER + MOBILE DRAWER
+====================================== */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ham-line {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--text-dim);
+  border-radius: 2px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.desktop-only { display: flex; }
+
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 400;
+  backdrop-filter: blur(3px);
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(280px, 85vw);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 32px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 401;
+  overflow-y: auto;
+}
+
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mobile-drawer-logo {
+  font-family: var(--font-head);
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+.mobile-drawer-logo span { color: var(--primary); }
+
+.mobile-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 4px;
+  transition: color 0.2s;
+}
+.mobile-close:hover { color: var(--text); }
+
+.mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  flex: 1;
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s;
+}
+.mobile-nav-link:hover { background: var(--surface-2); color: var(--text); }
+.mobile-nav-link:last-child { border-bottom: none; }
+
+.mobile-nav-icon { font-size: 1.3rem; width: 28px; text-align: center; flex-shrink: 0; }
+
+.mobile-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mobile-user {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .home-grid { grid-template-columns: 1fr; }
   .home-left { display: none; }
   .news-grid { grid-template-columns: 1fr; }
   .header-nav { display: none; }
+  .hamburger-btn { display: flex; }
+  .desktop-only { display: none !important; }
   .team-banner-inner { flex-direction: column; text-align: center; }
   .squad-split { grid-template-columns: 1fr; }
   .squad-field { position: static; }
   .field-bench-panel { width: 120px; }
+  .news-hero-title { font-size: 1.2rem; }
+  .home-center { padding: 12px; }
 }
