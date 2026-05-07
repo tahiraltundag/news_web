@@ -1488,6 +1488,7 @@ img { display: block; max-width: 100%; }
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  max-width: 100%;
 }
 
 .sport-field-wrap {
@@ -1617,6 +1618,7 @@ img { display: block; max-width: 100%; }
   border: 2px solid rgba(255,255,255,0.9);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   transition: transform 0.1s, box-shadow 0.1s;
+  flex-shrink: 0;
 }
 
 .field-player-num {
@@ -1836,4 +1838,73 @@ img { display: block; max-width: 100%; }
   /* Article modal */
   .article-modal { padding: 20px; }
   .article-title { font-size: 1.4rem; }
+
+  /* ── Futbol sahası mobil düzeltmesi ── */
+  .squad-split { grid-template-columns: 1fr; }
+  .squad-field { position: static; overflow: hidden; }
+  .squad-sidebar { max-height: none; }
+
+  /* Saha + yedek panelini dikey stack'e çevir */
+  .field-bench-wrap {
+    flex-direction: column;
+    border-radius: 10px;
+  }
+
+  /* Saha tam genişlik */
+  .sport-field-wrap {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* Yedek paneli altta yatay scroll şeridine çevir */
+  .field-bench-panel {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: auto;
+    min-height: 0;
+    padding: 6px 8px;
+    gap: 6px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    border-left: none;
+    align-items: center;
+  }
+
+  .bench-title { display: none; }
+
+  .bench-player {
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 4px 6px;
+    gap: 2px;
+    min-width: 44px;
+  }
+
+  .bench-num { width: auto; text-align: center; }
+  .bench-name { font-size: 0.62rem; max-width: 44px; }
+  .bench-pos { font-size: 0.52rem; }
+
+  /* Oyuncu noktalarını küçült */
+  .field-player-dot {
+    width: 22px;
+    height: 22px;
+    border-width: 1.5px;
+  }
+
+  .field-player-dot.tennis { width: 20px; height: 20px; }
+
+  .field-player-num { font-size: 0.5rem; }
+
+  .field-player-label {
+    font-size: 0.5rem;
+    max-width: 40px;
+    padding: 1px 3px;
+  }
+
+  /* Formasyon bar wrap */
+  .formation-bar { flex-wrap: wrap; gap: 4px; }
+  .formation-btn { font-size: 0.68rem; padding: 3px 8px; }
 }
